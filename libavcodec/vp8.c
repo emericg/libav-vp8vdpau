@@ -29,6 +29,7 @@
 #include "vp8data.h"
 #include "rectangle.h"
 #include "thread.h"
+#include "vdpau_internal.h"
 
 #if ARCH_ARM
 #   include "arm/vp8.h"
@@ -1652,6 +1653,11 @@ static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
 
     ff_thread_finish_setup(avctx);
 
+    if (CONFIG_VP8_VDPAU_DECODER && s->avctx->codec->capabilities&CODEC_CAP_HWACCEL_VDPAU) {
+        ff_vdpau_vp8_decode_picture(s, avpkt->data, avpkt->size);
+        goto skip_decode;
+    }
+
     s->linesize   = curframe->linesize[0];
     s->uvlinesize = curframe->linesize[1];
 
@@ -1785,7 +1791,11 @@ static av_cold int vp8_decode_init(AVCodecContext *avctx)
     VP8Context *s = avctx->priv_data;
 
     s->avctx = avctx;
-    avctx->pix_fmt = PIX_FMT_YUV420P;
+
+    if (CONFIG_VP8_VDPAU_DECODER && s->avctx->codec->capabilities&CODEC_CAP_HWACCEL_VDPAU)
+        avctx->pix_fmt = PIX_FMT_VDPAU_VP8;
+    else
+        avctx->pix_fmt = PIX_FMT_YUV420P;
 
     ff_dsputil_init(&s->dsp, avctx);
     ff_h264_pred_init(&s->hpc, CODEC_ID_VP8, 8, 1);
@@ -1850,4 +1860,22 @@ AVCodec ff_vp8_decoder = {
     .long_name = NULL_IF_CONFIG_SMALL("On2 VP8"),
     .init_thread_copy      = ONLY_IF_THREADS_ENABLED(vp8_decode_init_thread_copy),
     .update_thread_context = ONLY_IF_THREADS_ENABLED(vp8_decode_update_thread_context),
+    .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUV420P, PIX_FMT_NONE},
 };
+
+#if CONFIG_VP8_VDPAU_DECODER
+AVCodec ff_vp8_vdpau_decoder = {
+    "vp8_vdpau",
+    AVMEDIA_TYPE_VIDEO,
+    CODEC_ID_VP8,
+    sizeof(VP8Context),
+    vp8_decode_init,
+    NULL,
+    vp8_decode_free,
+    vp8_decode_frame,
+    CODEC_CAP_DR1 | CODEC_CAP_HWACCEL_VDPAU,
+    .flush = vp8_decode_flush,
+    .long_name = NULL_IF_CONFIG_SMALL("On2 VP8 (VDPAU acceleration)"),
+    .pix_fmts = (const enum PixelFormat[]){PIX_FMT_VDPAU_VP8, PIX_FMT_NONE},
+};
+#endif

@@ -1,6 +1,6 @@
 /*
- * Video Decode and Presentation API for UNIX (VDPAU) is used for
- * HW decode acceleration for MPEG-1/2, MPEG-4 ASP, H.264 and VC-1.
+ * The Video Decode and Presentation API for UNIX (VDPAU) is used for
+ * hardware-accelerated decoding of MPEG-1/2, H.264, VC-1 and VP8.
  *
  * Copyright (c) 2008 NVIDIA
  *
@@ -25,6 +25,7 @@
 #include "avcodec.h"
 #include "h264.h"
 #include "vc1.h"
+#include "vp8.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -37,6 +38,24 @@
  *
  * @{
  */
+
+void ff_vdpau_add_data_chunk(MpegEncContext *s,
+                             const uint8_t *buf, int buf_size)
+{
+    struct vdpau_render_state *render;
+
+    render = (struct vdpau_render_state *)s->current_picture_ptr->data[0];
+    assert(render);
+
+    render->bitstream_buffers = av_fast_realloc(render->bitstream_buffers,
+                                                &render->bitstream_buffers_allocated,
+                                                sizeof(*render->bitstream_buffers)*(render->bitstream_buffers_used + 1));
+
+    render->bitstream_buffers[render->bitstream_buffers_used].struct_version  = VDP_BITSTREAM_BUFFER_VERSION;
+    render->bitstream_buffers[render->bitstream_buffers_used].bitstream       = buf;
+    render->bitstream_buffers[render->bitstream_buffers_used].bitstream_bytes = buf_size;
+    render->bitstream_buffers_used++;
+}
 
 void ff_vdpau_h264_set_reference_frames(MpegEncContext *s)
 {
@@ -107,26 +126,6 @@ void ff_vdpau_h264_set_reference_frames(MpegEncContext *s)
     }
 }
 
-void ff_vdpau_add_data_chunk(MpegEncContext *s,
-                             const uint8_t *buf, int buf_size)
-{
-    struct vdpau_render_state *render;
-
-    render = (struct vdpau_render_state *)s->current_picture_ptr->f.data[0];
-    assert(render);
-
-    render->bitstream_buffers= av_fast_realloc(
-        render->bitstream_buffers,
-        &render->bitstream_buffers_allocated,
-        sizeof(*render->bitstream_buffers)*(render->bitstream_buffers_used + 1)
-    );
-
-    render->bitstream_buffers[render->bitstream_buffers_used].struct_version  = VDP_BITSTREAM_BUFFER_VERSION;
-    render->bitstream_buffers[render->bitstream_buffers_used].bitstream       = buf;
-    render->bitstream_buffers[render->bitstream_buffers_used].bitstream_bytes = buf_size;
-    render->bitstream_buffers_used++;
-}
-
 void ff_vdpau_h264_picture_start(MpegEncContext *s)
 {
     H264Context *h = s->avctx->priv_data;
@@ -190,8 +189,8 @@ void ff_vdpau_h264_picture_complete(MpegEncContext *s)
     render->bitstream_buffers_used = 0;
 }
 
-void ff_vdpau_mpeg_picture_complete(MpegEncContext *s, const uint8_t *buf,
-                                    int buf_size, int slice_count)
+void ff_vdpau_mpeg_decode_picture(MpegEncContext *s, const uint8_t *buf,
+                                  int buf_size, int slice_count)
 {
     struct vdpau_render_state *render, *last, *next;
     int i;
@@ -211,8 +210,8 @@ void ff_vdpau_mpeg_picture_complete(MpegEncContext *s, const uint8_t *buf,
     render->info.mpeg.alternate_scan             = s->alternate_scan;
     render->info.mpeg.q_scale_type               = s->q_scale_type;
     render->info.mpeg.top_field_first            = s->top_field_first;
-    render->info.mpeg.full_pel_forward_vector    = s->full_pel[0]; // MPEG-1 only.  Set 0 for MPEG-2
-    render->info.mpeg.full_pel_backward_vector   = s->full_pel[1]; // MPEG-1 only.  Set 0 for MPEG-2
+    render->info.mpeg.full_pel_forward_vector    = s->full_pel[0]; // MPEG-1 only. Set 0 for MPEG-2.
+    render->info.mpeg.full_pel_backward_vector   = s->full_pel[1]; // MPEG-1 only. Set 0 for MPEG-2.
     render->info.mpeg.f_code[0][0]               = s->mpeg_f_code[0][0]; // For MPEG-1 fill both horiz. & vert.
     render->info.mpeg.f_code[0][1]               = s->mpeg_f_code[0][1];
     render->info.mpeg.f_code[1][0]               = s->mpeg_f_code[1][0];
@@ -225,7 +224,7 @@ void ff_vdpau_mpeg_picture_complete(MpegEncContext *s, const uint8_t *buf,
     render->info.mpeg.forward_reference          = VDP_INVALID_HANDLE;
     render->info.mpeg.backward_reference         = VDP_INVALID_HANDLE;
 
-    switch(s->pict_type){
+    switch(s->pict_type) {
     case  AV_PICTURE_TYPE_B:
         next = (struct vdpau_render_state *)s->next_picture.f.data[0];
         assert(next);
@@ -247,8 +246,8 @@ void ff_vdpau_mpeg_picture_complete(MpegEncContext *s, const uint8_t *buf,
     render->bitstream_buffers_used               = 0;
 }
 
-void ff_vdpau_vc1_decode_picture(MpegEncContext *s, const uint8_t *buf,
-                                 int buf_size)
+void ff_vdpau_vc1_decode_picture(MpegEncContext *s,
+                                 const uint8_t *buf, int buf_size)
 {
     VC1Context *v = s->avctx->priv_data;
     struct vdpau_render_state *render, *last, *next;
@@ -295,7 +294,7 @@ void ff_vdpau_vc1_decode_picture(MpegEncContext *s, const uint8_t *buf,
     else
         render->info.vc1.picture_type = s->pict_type - 1 + s->pict_type / 3;
 
-    switch(s->pict_type){
+    switch(s->pict_type) {
     case  AV_PICTURE_TYPE_B:
         next = (struct vdpau_render_state *)s->next_picture.f.data[0];
         assert(next);
@@ -316,8 +315,8 @@ void ff_vdpau_vc1_decode_picture(MpegEncContext *s, const uint8_t *buf,
     render->bitstream_buffers_used        = 0;
 }
 
-void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s, const uint8_t *buf,
-                                   int buf_size)
+void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s,
+                                   const uint8_t *buf, int buf_size)
 {
     struct vdpau_render_state *render, *last, *next;
     int i;
@@ -367,6 +366,126 @@ void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s, const uint8_t *buf,
     ff_vdpau_add_data_chunk(s, buf, buf_size);
 
     ff_draw_horiz_band(s, 0, s->avctx->height);
+    render->bitstream_buffers_used = 0;
+}
+
+void ff_vdpau_vp8_add_data_chunk(VP8Context *s,
+                                 const uint8_t *buf, int buf_size)
+{
+    struct vdpau_render_state *render;
+
+    render = (struct vdpau_render_state *)s->framep[VP56_FRAME_CURRENT]->data[0];
+    assert(render);
+
+    render->bitstream_buffers= av_fast_realloc(render->bitstream_buffers,
+                                               &render->bitstream_buffers_allocated,
+                                               sizeof(*render->bitstream_buffers)*(render->bitstream_buffers_used + 1));
+
+    render->bitstream_buffers[render->bitstream_buffers_used].struct_version  = VDP_BITSTREAM_BUFFER_VERSION;
+    render->bitstream_buffers[render->bitstream_buffers_used].bitstream       = buf;
+    render->bitstream_buffers[render->bitstream_buffers_used].bitstream_bytes = buf_size;
+    render->bitstream_buffers_used++;
+}
+
+void ff_vdpau_vp8_decode_picture(VP8Context *s,
+                                 const uint8_t *buf, int buf_size)
+{
+    struct vdpau_render_state *render, *ref;
+    int i, j, k, l;
+    int vp8_coeff_band[16] = {0, 1, 2, 3, 6, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 7};
+
+    render = (struct vdpau_render_state *)s->framep[VP56_FRAME_CURRENT]->data[0];
+    assert(render);
+
+    /* fill VdpPictureInfoVP8 struct */
+    render->info.vp8.key_frame                   = s->keyframe;
+    render->info.vp8.version                     = s->profile;
+    render->info.vp8.show_frame                  = s->invisible;
+    render->info.vp8.first_partition_size        = 0;
+    render->info.vp8.horizontal_scale            = 0;
+    render->info.vp8.width                       = s->avctx->width;
+    render->info.vp8.vertical_scale              = 0;
+    render->info.vp8.height                      = s->avctx->height;
+    render->info.vp8.color_space                 = 0;
+    render->info.vp8.clamping_type               = 0;
+    render->info.vp8.segmentation_enable         = s->segmentation.enabled;
+    render->info.vp8.segment_map_update          = s->segmentation.update_map;
+    render->info.vp8.segment_data_update         = 0;
+    render->info.vp8.segment_data_mode           = s->segmentation.absolute_vals;
+    for (i = 0; i < 4; i++) {
+        render->info.vp8.segment_base_quant[i]   = s->segmentation.base_quant[i];
+        render->info.vp8.segment_filter_level[i] = s->segmentation.filter_level[i];
+    }
+    for (i = 0; i < 3; i++) {
+        render->info.vp8.segment_id[i]           = s->prob[0].segmentid[i];
+    }
+    render->info.vp8.filter_type                 = s->filter.simple;
+    render->info.vp8.filter_level                = s->filter.level;
+    render->info.vp8.filter_sharpness_level      = s->filter.sharpness;
+    render->info.vp8.filter_update               = s->lf_delta.enabled;
+    for (i = 0; i < 4; i++) {
+        render->info.vp8.filter_update_sign[i]   = s->lf_delta.ref[i];
+        render->info.vp8.filter_update_value[i]  = s->lf_delta.mode[i+4];
+    }
+    render->info.vp8.num_coeff_partitions        = s->num_coeff_partitions;
+    memcpy(render->info.vp8.dquant, s->qmat, sizeof(s->qmat));
+    render->info.vp8.refresh_golden              = (s->update_golden == 0) ? 0 : 1;
+    render->info.vp8.refresh_altref              = (s->update_altref == 0) ? 0 : 1;
+    for (i = 0; i < 2; i++) {
+        render->info.vp8.sign_bias_flag[i]       = s->sign_bias[i+2];
+    }
+    render->info.vp8.refresh_probabilities       = s->update_probabilities;
+    render->info.vp8.refresh_last                = s->update_last;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 16; j++)
+            for (k = 0; k < 3; k++)
+                for (l = 0; l < 11; l++)
+                    render->info.vp8.token_prob[i][vp8_coeff_band[j]][k][l] = s->prob[0].token[i][vp8_coeff_band[j]][k][l];
+    render->info.vp8.mb_no_coeff_skip            = s->mbskip_enabled;
+    render->info.vp8.prob_skip_false             = s->prob[0].mbskip;
+    render->info.vp8.prob_intra                  = s->prob[0].intra;
+    render->info.vp8.prob_last                   = s->prob[0].last;
+    render->info.vp8.prob_golden                 = s->prob[0].golden;
+    for (i = 0; i < 4; i++) {
+        render->info.vp8.intra_16x16_prob[i]     = s->prob[0].pred16x16[i];
+    }
+    for (i = 0; i < 3; i++) {
+        render->info.vp8.intra_chroma_prob[i]    = s->prob[0].pred8x8c[i];
+    }
+    for (i = 0; i < 2; i++)
+        for (j = 0; j < 19; j++)
+            render->info.vp8.mv_prob[i][j]       = s->prob[0].mvc[i][j];
+
+    // Handle reference frames
+    render->info.vp8.golden_frame   = VDP_INVALID_HANDLE;
+    render->info.vp8.altref_frame   = VDP_INVALID_HANDLE;
+    render->info.vp8.previous_frame = VDP_INVALID_HANDLE;
+/*
+    ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN]->data[0];
+    if (ref != NULL) {
+        render->info.vp8.golden_frame = ref->surface;
+    }
+    ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN2]->data[0];
+    if (ref != NULL) {
+        render->info.vp8.altref_frame = ref->surface;
+    }
+    ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_PREVIOUS]->data[0];
+    if (ref != NULL) {
+        render->info.vp8.previous_frame = ref->surface;
+    }
+*/
+    // We add the start_code, usually found in the key frame uncompressed header
+    const uint8_t start_code[] = {0x9d, 0x01, 0x2a};
+    ff_vdpau_vp8_add_data_chunk(s, start_code, sizeof(start_code));
+
+    // Then we add the VP8 data buffer
+    ff_vdpau_vp8_add_data_chunk(s, buf, buf_size);
+
+    // Instead of calling ff_draw_horiz_band() like mpeg based codecs,
+    // we directly call draw_horiz_band()
+    int offset[4] = {0};
+    s->avctx->draw_horiz_band(s->avctx, s->framep[VP56_FRAME_CURRENT], offset, 0, 0, s->avctx->height);
+
     render->bitstream_buffers_used = 0;
 }
 

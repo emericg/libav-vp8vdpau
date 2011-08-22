@@ -1,6 +1,6 @@
 /*
- * Video Decode and Presentation API for UNIX (VDPAU) is used for
- * HW decode acceleration for MPEG-1/2, H.264 and VC-1.
+ * The Video Decode and Presentation API for UNIX (VDPAU) is used for
+ * hardware-accelerated decoding of MPEG-1/2, H.264, VC-1 and VP8.
  *
  * Copyright (C) 2008 NVIDIA
  *
@@ -26,21 +26,27 @@
 
 #include <stdint.h>
 #include "mpegvideo.h"
+#include "vp8.h"
 
-void ff_vdpau_add_data_chunk(MpegEncContext *s, const uint8_t *buf,
-                             int buf_size);
+void ff_vdpau_add_data_chunk(MpegEncContext *s,
+                             const uint8_t *buf, int buf_size);
 
-void ff_vdpau_mpeg_picture_complete(MpegEncContext *s, const uint8_t *buf,
-                                    int buf_size, int slice_count);
-
-void ff_vdpau_h264_picture_start(MpegEncContext *s);
 void ff_vdpau_h264_set_reference_frames(MpegEncContext *s);
+void ff_vdpau_h264_picture_start(MpegEncContext *s);
 void ff_vdpau_h264_picture_complete(MpegEncContext *s);
 
-void ff_vdpau_vc1_decode_picture(MpegEncContext *s, const uint8_t *buf,
-                                 int buf_size);
+void ff_vdpau_mpeg_decode_picture(MpegEncContext *s, const uint8_t *buf,
+                                  int buf_size, int slice_count);
 
-void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s, const uint8_t *buf,
-                                   int buf_size);
+void ff_vdpau_vc1_decode_picture(MpegEncContext *s,
+                                 const uint8_t *buf, int buf_size);
+
+void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s,
+                                   const uint8_t *buf, int buf_size);
+
+void ff_vdpau_vp8_add_data_chunk(VP8Context *s,
+                                 const uint8_t *buf, int buf_size);
+void ff_vdpau_vp8_decode_picture(VP8Context *s,
+                                 const uint8_t *buf, int buf_size);
 
 #endif /* AVCODEC_VDPAU_INTERNAL_H */
