@@ -44,7 +44,7 @@ void ff_vdpau_add_data_chunk(MpegEncContext *s,
 {
     struct vdpau_render_state *render;
 
-    render = (struct vdpau_render_state *)s->current_picture_ptr->data[0];
+    render = (struct vdpau_render_state *)s->current_picture_ptr->f.data[0];
     assert(render);
 
     render->bitstream_buffers = av_fast_realloc(render->bitstream_buffers,
