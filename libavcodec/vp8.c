@@ -1653,7 +1653,9 @@ static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
 
     ff_thread_finish_setup(avctx);
 
+    // VDPAU decoding hook
     if (CONFIG_VP8_VDPAU_DECODER && s->avctx->codec->capabilities&CODEC_CAP_HWACCEL_VDPAU) {
+        // FIXME find buffer offet into vp56range decoder
         ff_vdpau_vp8_decode_picture(s, avpkt->data, avpkt->size);
         goto skip_decode;
     }
@@ -1856,26 +1858,25 @@ AVCodec ff_vp8_decoder = {
     .close          = vp8_decode_free,
     .decode         = vp8_decode_frame,
     .capabilities   = CODEC_CAP_DR1 | CODEC_CAP_FRAME_THREADS,
-    .flush = vp8_decode_flush,
-    .long_name = NULL_IF_CONFIG_SMALL("On2 VP8"),
+    .flush          = vp8_decode_flush,
+    .long_name      = NULL_IF_CONFIG_SMALL("On2 VP8"),
     .init_thread_copy      = ONLY_IF_THREADS_ENABLED(vp8_decode_init_thread_copy),
     .update_thread_context = ONLY_IF_THREADS_ENABLED(vp8_decode_update_thread_context),
-    .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUV420P, PIX_FMT_NONE},
+    .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUV420P, PIX_FMT_NONE},
 };
 
 #if CONFIG_VP8_VDPAU_DECODER
 AVCodec ff_vp8_vdpau_decoder = {
-    "vp8_vdpau",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_VP8,
-    sizeof(VP8Context),
-    vp8_decode_init,
-    NULL,
-    vp8_decode_free,
-    vp8_decode_frame,
-    CODEC_CAP_DR1 | CODEC_CAP_HWACCEL_VDPAU,
-    .flush = vp8_decode_flush,
-    .long_name = NULL_IF_CONFIG_SMALL("On2 VP8 (VDPAU acceleration)"),
-    .pix_fmts = (const enum PixelFormat[]){PIX_FMT_VDPAU_VP8, PIX_FMT_NONE},
+    .name           = "vp8_vdpau",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_VP8,
+    .priv_data_size = sizeof(VP8Context),
+    .init           = vp8_decode_init,
+    .close          = vp8_decode_free,
+    .decode         = vp8_decode_frame,
+    .capabilities   = CODEC_CAP_DR1 | CODEC_CAP_HWACCEL_VDPAU,
+    .flush          = vp8_decode_flush,
+    .long_name      = NULL_IF_CONFIG_SMALL("On2 VP8 (VDPAU acceleration)"),
+    .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_VDPAU_VP8, PIX_FMT_NONE},
 };
 #endif
