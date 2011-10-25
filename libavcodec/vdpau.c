@@ -457,23 +457,32 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
             render->info.vp8.mv_prob[i][j]       = s->prob[0].mvc[i][j];
 
     // Handle reference frames
+    render->info.vp8.previous_frame = VDP_INVALID_HANDLE;
     render->info.vp8.golden_frame   = VDP_INVALID_HANDLE;
     render->info.vp8.altref_frame   = VDP_INVALID_HANDLE;
-    render->info.vp8.previous_frame = VDP_INVALID_HANDLE;
-/*
-    ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN]->data[0];
-    if (ref != NULL) {
-        render->info.vp8.golden_frame = ref->surface;
+
+    for (i = 0; i < 5; i++)
+    {
+        if (s->frames[i].data[0] && s->frames[i].ref_index[0])
+        {
+            if (&s->frames[i] == s->framep[VP56_FRAME_PREVIOUS])
+            {
+                ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_PREVIOUS]->data[0];
+                render->info.vp8.previous_frame = ref->surface;
+            }
+            else if (&s->frames[i] == s->framep[VP56_FRAME_GOLDEN])
+            {
+                ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN]->data[0];
+                render->info.vp8.golden_frame = ref->surface;
+            }
+            else if (&s->frames[i] == s->framep[VP56_FRAME_GOLDEN2])
+            {
+                ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN]->data[0];
+                render->info.vp8.altref_frame = ref->surface;
+            }
+        }
     }
-    ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN2]->data[0];
-    if (ref != NULL) {
-        render->info.vp8.altref_frame = ref->surface;
-    }
-    ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_PREVIOUS]->data[0];
-    if (ref != NULL) {
-        render->info.vp8.previous_frame = ref->surface;
-    }
-*/
+
     // We add the start_code, usually found in the key frame uncompressed header
     const uint8_t start_code[] = {0x9d, 0x01, 0x2a};
     ff_vdpau_vp8_add_data_chunk(s, start_code, sizeof(start_code));
