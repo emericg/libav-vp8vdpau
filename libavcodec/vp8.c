@@ -271,14 +271,14 @@ static void update_refs(VP8Context *s)
 static int decode_frame_header(VP8Context *s, const uint8_t *buf, int buf_size)
 {
     VP56RangeCoder *c = &s->c;
-    int header_size, hscale, vscale, i, j, k, l, m, ret;
+    int hscale, vscale, i, j, k, l, m, ret;
     int width  = s->avctx->width;
     int height = s->avctx->height;
 
-    s->keyframe  = !(buf[0] & 1);
-    s->profile   =  (buf[0]>>1) & 7;
-    s->invisible = !(buf[0] & 0x10);
-    header_size  = AV_RL24(buf) >> 5;
+    s->keyframe             = !(buf[0] & 1);
+    s->profile              =  (buf[0]>>1) & 7;
+    s->invisible            = !(buf[0] & 0x10);
+    s->first_partition_size = AV_RL24(buf) >> 5;
     buf      += 3;
     buf_size -= 3;
 
@@ -290,7 +290,7 @@ static int decode_frame_header(VP8Context *s, const uint8_t *buf, int buf_size)
     else    // profile 1-3 use bilinear, 4+ aren't defined so whatever
         memcpy(s->put_pixels_tab, s->vp8dsp.put_vp8_bilinear_pixels_tab, sizeof(s->put_pixels_tab));
 
-    if (header_size > buf_size - 7*s->keyframe) {
+    if (s->first_partition_size > buf_size - 7*s->keyframe) {
         av_log(s->avctx, AV_LOG_ERROR, "Header size larger than data provided\n");
         return AVERROR_INVALIDDATA;
     }
@@ -327,9 +327,9 @@ static int decode_frame_header(VP8Context *s, const uint8_t *buf, int buf_size)
             return ret;
     }
 
-    ff_vp56_init_range_decoder(c, buf, header_size);
-    buf      += header_size;
-    buf_size -= header_size;
+    ff_vp56_init_range_decoder(c, buf, (int)s->first_partition_size);
+    buf      += s->first_partition_size;
+    buf_size -= s->first_partition_size;
 
     if (s->keyframe) {
         if (vp8_rac_get(c))

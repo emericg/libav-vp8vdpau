@@ -398,10 +398,10 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
     assert(render);
 
     /* fill VdpPictureInfoVP8 struct */
-    render->info.vp8.key_frame                   = s->keyframe;
+    render->info.vp8.key_frame                   = !s->keyframe;
     render->info.vp8.version                     = s->profile;
-    render->info.vp8.show_frame                  = s->invisible;
-    render->info.vp8.first_partition_size        = 0;
+    render->info.vp8.show_frame                  = !s->invisible;
+    render->info.vp8.first_partition_size        = s->first_partition_size;
     render->info.vp8.horizontal_scale            = 0;
     render->info.vp8.width                       = s->avctx->width;
     render->info.vp8.vertical_scale              = 0;
@@ -488,10 +488,11 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
     ff_vdpau_vp8_add_data_chunk(s, start_code, sizeof(start_code));
 
     // Then we add the VP8 data buffer
-    ff_vdpau_vp8_add_data_chunk(s, buf, buf_size);
+    ptrdiff_t header_size = (s->keyframe == 0) ? 3 : 10;
+    ff_vdpau_vp8_add_data_chunk(s, buf + header_size, buf_size);
 
     // Instead of calling ff_draw_horiz_band() like mpeg based codecs,
-    // we directly call draw_horiz_band()
+    // we call draw_horiz_band() directly
     int offset[4] = {0};
     s->avctx->draw_horiz_band(s->avctx, s->framep[VP56_FRAME_CURRENT], offset, 0, 0, s->avctx->height);
 

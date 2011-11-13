@@ -94,6 +94,7 @@ typedef struct {
     int linesize;
     int uvlinesize;
 
+    int first_partition_size;
     uint8_t keyframe;
     uint8_t deblock_filter;
     uint8_t mbskip_enabled;
