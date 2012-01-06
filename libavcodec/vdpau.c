@@ -393,6 +393,9 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
     struct vdpau_render_state *render, *ref;
     int i, j, k, l;
     int vp8_coeff_band[16] = {0, 1, 2, 3, 6, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 7};
+    int offset[4] = {0, 0, 0, 0};
+    const uint8_t start_code[3] = {0x9d, 0x01, 0x2a};
+    ptrdiff_t header_size = 0;
 
     render = (struct vdpau_render_state *)s->framep[VP56_FRAME_CURRENT]->data[0];
     assert(render);
@@ -484,16 +487,14 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
     }
 
     // We add the start_code, usually found in the key frame uncompressed header
-    const uint8_t start_code[] = {0x9d, 0x01, 0x2a};
     ff_vdpau_vp8_add_data_chunk(s, start_code, sizeof(start_code));
 
     // Then we add the VP8 data buffer
-    ptrdiff_t header_size = (s->keyframe == 0) ? 3 : 10;
+    header_size = (s->keyframe == 0) ? 3 : 10;
     ff_vdpau_vp8_add_data_chunk(s, buf + header_size, buf_size);
 
     // Instead of calling ff_draw_horiz_band() like mpeg based codecs,
     // we call draw_horiz_band() directly
-    int offset[4] = {0};
     s->avctx->draw_horiz_band(s->avctx, s->framep[VP56_FRAME_CURRENT], offset, 0, 0, s->avctx->height);
 
     render->bitstream_buffers_used = 0;
