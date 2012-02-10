@@ -1651,14 +1651,13 @@ static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
     }
     s->next_framep[VP56_FRAME_CURRENT]      = curframe;
 
-    ff_thread_finish_setup(avctx);
-
     // VDPAU decoding hook
     if (CONFIG_VP8_VDPAU_DECODER && s->avctx->codec->capabilities&CODEC_CAP_HWACCEL_VDPAU) {
-        // FIXME find buffer offet into vp56range decoder
         ff_vdpau_vp8_decode_picture(s, avpkt->data, avpkt->size);
-        goto skip_decode;
+        goto vdpau_bypass_decode;
     }
+
+    ff_thread_finish_setup(avctx);
 
     s->linesize   = curframe->linesize[0];
     s->uvlinesize = curframe->linesize[1];
@@ -1769,6 +1768,8 @@ static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
     }
 
     ff_thread_report_progress(curframe, INT_MAX, 0);
+
+vdpau_bypass_decode:
     memcpy(&s->framep[0], &s->next_framep[0], sizeof(s->framep[0]) * 4);
 
 skip_decode:
