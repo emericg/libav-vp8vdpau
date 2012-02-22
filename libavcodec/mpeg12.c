@@ -2254,7 +2254,7 @@ static int decode_chunks(AVCodecContext *avctx,
                 }
 
                 if (CONFIG_MPEG_VDPAU_DECODER && avctx->codec->capabilities & CODEC_CAP_HWACCEL_VDPAU)
-                    ff_vdpau_mpeg_decode_picture(s2, buf, buf_size, s->slice_count);
+                    ff_vdpau_mpeg12_decode_picture(s2, buf, buf_size, s->slice_count);
 
                 if (slice_end(avctx, picture)) {
                     if (s2->last_picture_ptr || s2->low_delay) //FIXME merge with the stuff in mpeg_decode_slice

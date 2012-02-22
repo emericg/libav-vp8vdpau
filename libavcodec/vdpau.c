@@ -189,8 +189,8 @@ void ff_vdpau_h264_picture_complete(MpegEncContext *s)
     render->bitstream_buffers_used = 0;
 }
 
-void ff_vdpau_mpeg_decode_picture(MpegEncContext *s, const uint8_t *buf,
-                                  int buf_size, int slice_count)
+void ff_vdpau_mpeg12_decode_picture(MpegEncContext *s, const uint8_t *buf,
+                                    int buf_size, int slice_count)
 {
     struct vdpau_render_state *render, *last, *next;
     int i;

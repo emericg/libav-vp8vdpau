@@ -35,8 +35,8 @@ void ff_vdpau_h264_set_reference_frames(MpegEncContext *s);
 void ff_vdpau_h264_picture_start(MpegEncContext *s);
 void ff_vdpau_h264_picture_complete(MpegEncContext *s);
 
-void ff_vdpau_mpeg_decode_picture(MpegEncContext *s, const uint8_t *buf,
-                                  int buf_size, int slice_count);
+void ff_vdpau_mpeg12_decode_picture(MpegEncContext *s, const uint8_t *buf,
+                                    int buf_size, int slice_count);
 
 void ff_vdpau_vc1_decode_picture(MpegEncContext *s,
                                  const uint8_t *buf, int buf_size);
