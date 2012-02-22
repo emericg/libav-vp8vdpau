@@ -369,8 +369,8 @@ void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s,
     render->bitstream_buffers_used = 0;
 }
 
-void ff_vdpau_vp8_add_data_chunk(VP8Context *s,
-                                 const uint8_t *buf, int buf_size)
+static void ff_vdpau_vp8_add_data_chunk(VP8Context *s,
+                                        const uint8_t *buf, int buf_size)
 {
     struct vdpau_render_state *render;
 

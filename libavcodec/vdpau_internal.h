@@ -44,8 +44,6 @@ void ff_vdpau_vc1_decode_picture(MpegEncContext *s,
 void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s,
                                    const uint8_t *buf, int buf_size);
 
-void ff_vdpau_vp8_add_data_chunk(VP8Context *s,
-                                 const uint8_t *buf, int buf_size);
 void ff_vdpau_vp8_decode_picture(VP8Context *s,
                                  const uint8_t *buf, int buf_size);
 
