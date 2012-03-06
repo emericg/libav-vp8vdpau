@@ -1,6 +1,6 @@
 /*
- * Video Decode and Presentation API for UNIX (VDPAU) is used for
- * HW decode acceleration for MPEG-1/2, MPEG-4 ASP, H.264 and VC-1.
+ * The Video Decode and Presentation API for UNIX (VDPAU) is used for
+ * hardware-accelerated decoding of MPEG-1/2, H.264, VC-1 and VP8.
  *
  * Copyright (c) 2008 NVIDIA
  *
@@ -25,6 +25,7 @@
 #include "avcodec.h"
 #include "h264.h"
 #include "vc1.h"
+#include "vp8.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -367,6 +368,86 @@ void ff_vdpau_mpeg4_decode_picture(MpegEncContext *s, const uint8_t *buf,
     ff_vdpau_add_data_chunk(s, buf, buf_size);
 
     ff_draw_horiz_band(s, 0, s->avctx->height);
+    render->bitstream_buffers_used = 0;
+}
+
+static void ff_vdpau_vp8_add_data_chunk(VP8Context *s,
+                                        const uint8_t *buf, int buf_size)
+{
+    struct vdpau_render_state *render;
+
+    render = (struct vdpau_render_state *)s->framep[VP56_FRAME_CURRENT]->data[0];
+    assert(render);
+
+    render->bitstream_buffers= av_fast_realloc(render->bitstream_buffers,
+                                               &render->bitstream_buffers_allocated,
+                                               sizeof(*render->bitstream_buffers)*(render->bitstream_buffers_used + 1));
+
+    render->bitstream_buffers[render->bitstream_buffers_used].struct_version  = VDP_BITSTREAM_BUFFER_VERSION;
+    render->bitstream_buffers[render->bitstream_buffers_used].bitstream       = buf;
+    render->bitstream_buffers[render->bitstream_buffers_used].bitstream_bytes = buf_size;
+    render->bitstream_buffers_used++;
+}
+
+void ff_vdpau_vp8_decode_picture(VP8Context *s,
+                                 const uint8_t *buf, int buf_size)
+{
+    struct vdpau_render_state *render, *ref;
+    int i = 0;
+    int offset[4] = {0, 0, 0, 0};
+    const uint8_t start_code[3] = {0x9d, 0x01, 0x2a};
+    ptrdiff_t header_size = (s->keyframe == 0) ? 3 : 10;
+
+    render = (struct vdpau_render_state *)s->framep[VP56_FRAME_CURRENT]->data[0];
+    assert(render);
+
+    // Fill VdpPictureInfoVP8 struct
+    render->info.vp8.key_frame        = !s->keyframe;
+    render->info.vp8.version          = s->profile;
+    render->info.vp8.show_frame       = !s->invisible;
+    render->info.vp8.first_part_size  = s->first_partition_size;
+    render->info.vp8.horizontal_scale = 0;
+    render->info.vp8.width            = s->avctx->width;
+    render->info.vp8.vertical_scale   = 0;
+    render->info.vp8.height           = s->avctx->height;
+
+    // Handle reference frames
+    render->info.vp8.previous_frame   = VDP_INVALID_HANDLE;
+    render->info.vp8.golden_frame     = VDP_INVALID_HANDLE;
+    render->info.vp8.altref_frame     = VDP_INVALID_HANDLE;
+
+    for (i = 0; i < 5; i++)
+    {
+        if (s->frames[i].data[0] && s->frames[i].ref_index[0])
+        {
+            if (&s->frames[i] == s->framep[VP56_FRAME_PREVIOUS])
+            {
+                ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_PREVIOUS]->data[0];
+                render->info.vp8.previous_frame = ref->surface;
+            }
+            else if (&s->frames[i] == s->framep[VP56_FRAME_GOLDEN])
+            {
+                ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN]->data[0];
+                render->info.vp8.golden_frame = ref->surface;
+            }
+            else if (&s->frames[i] == s->framep[VP56_FRAME_GOLDEN2])
+            {
+                ref = (struct vdpau_render_state *)s->framep[VP56_FRAME_GOLDEN]->data[0];
+                render->info.vp8.altref_frame = ref->surface;
+            }
+        }
+    }
+
+    // We add the start_code, usually found in the key frame uncompressed header
+    ff_vdpau_vp8_add_data_chunk(s, start_code, sizeof(start_code));
+
+    // We add the VP8 data buffer
+    ff_vdpau_vp8_add_data_chunk(s, buf + header_size, buf_size);
+
+    // Instead of calling ff_draw_horiz_band() like mpeg based codecs,
+    // we call draw_horiz_band() directly
+    s->avctx->draw_horiz_band(s->avctx, s->framep[VP56_FRAME_CURRENT], offset, 0, 0, s->avctx->height);
+
     render->bitstream_buffers_used = 0;
 }
 

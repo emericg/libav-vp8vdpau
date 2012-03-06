@@ -1,6 +1,6 @@
 /*
  * The Video Decode and Presentation API for UNIX (VDPAU) is used for
- * hardware-accelerated decoding of MPEG-1/2, H.264 and VC-1.
+ * hardware-accelerated decoding of MPEG-1/2, H.264, VC-1 and VP8.
  *
  * Copyright (C) 2008 NVIDIA
  *
@@ -79,6 +79,7 @@ struct vdpau_render_state {
         VdpPictureInfoMPEG1Or2    mpeg;
         VdpPictureInfoVC1          vc1;
         VdpPictureInfoMPEG4Part2 mpeg4;
+        VdpPictureInfoVP8          vp8;
     } info;
 
     /** Describe size/location of the compressed video data.

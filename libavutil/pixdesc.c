@@ -563,6 +563,12 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
         .log2_chroma_h = 1,
         .flags = PIX_FMT_HWACCEL,
     },
+    [PIX_FMT_VDPAU_VP8] = {
+        .name = "vdpau_vp8",
+        .log2_chroma_w = 1,
+        .log2_chroma_h = 1,
+        .flags = PIX_FMT_HWACCEL,
+    },
     [PIX_FMT_RGB48BE] = {
         .name = "rgb48be",
         .nb_components = 3,

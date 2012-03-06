@@ -30,6 +30,7 @@
 #include "vp8data.h"
 #include "rectangle.h"
 #include "thread.h"
+#include "vdpau_internal.h"
 
 #if ARCH_ARM
 #   include "arm/vp8.h"
@@ -305,14 +306,14 @@ static void update_refs(VP8Context *s)
 static int decode_frame_header(VP8Context *s, const uint8_t *buf, int buf_size)
 {
     VP56RangeCoder *c = &s->c;
-    int header_size, hscale, vscale, i, j, k, l, m, ret;
+    int hscale, vscale, i, j, k, l, m, ret;
     int width  = s->avctx->width;
     int height = s->avctx->height;
 
-    s->keyframe  = !(buf[0] & 1);
-    s->profile   =  (buf[0]>>1) & 7;
-    s->invisible = !(buf[0] & 0x10);
-    header_size  = AV_RL24(buf) >> 5;
+    s->keyframe             = !(buf[0] & 1);
+    s->profile              =  (buf[0]>>1) & 7;
+    s->invisible            = !(buf[0] & 0x10);
+    s->first_partition_size = AV_RL24(buf) >> 5;
     buf      += 3;
     buf_size -= 3;
 
@@ -324,7 +325,7 @@ static int decode_frame_header(VP8Context *s, const uint8_t *buf, int buf_size)
     else    // profile 1-3 use bilinear, 4+ aren't defined so whatever
         memcpy(s->put_pixels_tab, s->vp8dsp.put_vp8_bilinear_pixels_tab, sizeof(s->put_pixels_tab));
 
-    if (header_size > buf_size - 7*s->keyframe) {
+    if (s->first_partition_size > (buf_size - 7*s->keyframe)) {
         av_log(s->avctx, AV_LOG_ERROR, "Header size larger than data provided\n");
         return AVERROR_INVALIDDATA;
     }
@@ -355,9 +356,9 @@ static int decode_frame_header(VP8Context *s, const uint8_t *buf, int buf_size)
         memset(&s->segmentation, 0, sizeof(s->segmentation));
     }
 
-    ff_vp56_init_range_decoder(c, buf, header_size);
-    buf      += header_size;
-    buf_size -= header_size;
+    ff_vp56_init_range_decoder(c, buf, s->first_partition_size);
+    buf      += s->first_partition_size;
+    buf_size -= s->first_partition_size;
 
     if (s->keyframe) {
         if (vp8_rac_get(c))
@@ -1944,6 +1945,12 @@ static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
     }
     s->next_framep[VP56_FRAME_CURRENT]      = curframe;
 
+    // VDPAU decoding hook
+    if (CONFIG_VP8_VDPAU_DECODER && s->avctx->codec->capabilities&CODEC_CAP_HWACCEL_VDPAU) {
+        ff_vdpau_vp8_decode_picture(s, avpkt->data, avpkt->size);
+        goto vdpau_bypass_decode;
+    }
+
     ff_thread_finish_setup(avctx);
 
     s->linesize   = curframe->linesize[0];
@@ -1992,6 +1999,8 @@ static int vp8_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
     avctx->execute2(avctx, vp8_decode_mb_row_sliced, s->thread_data, NULL, num_jobs);
 
     ff_thread_report_progress(curframe, INT_MAX, 0);
+
+vdpau_bypass_decode:
     memcpy(&s->framep[0], &s->next_framep[0], sizeof(s->framep[0]) * 4);
 
 skip_decode:
@@ -2016,7 +2025,11 @@ static av_cold int vp8_decode_init(AVCodecContext *avctx)
     VP8Context *s = avctx->priv_data;
 
     s->avctx = avctx;
-    avctx->pix_fmt = PIX_FMT_YUV420P;
+
+    if (CONFIG_VP8_VDPAU_DECODER && s->avctx->codec->capabilities&CODEC_CAP_HWACCEL_VDPAU)
+        avctx->pix_fmt = PIX_FMT_VDPAU_VP8;
+    else
+        avctx->pix_fmt = PIX_FMT_YUV420P;
 
     ff_dsputil_init(&s->dsp, avctx);
     ff_h264_pred_init(&s->hpc, AV_CODEC_ID_VP8, 8, 1);
@@ -2083,4 +2096,21 @@ AVCodec ff_vp8_decoder = {
     .long_name             = NULL_IF_CONFIG_SMALL("On2 VP8"),
     .init_thread_copy      = ONLY_IF_THREADS_ENABLED(vp8_decode_init_thread_copy),
     .update_thread_context = ONLY_IF_THREADS_ENABLED(vp8_decode_update_thread_context),
+    .pix_fmts              = (const enum PixelFormat[]){PIX_FMT_YUV420P, PIX_FMT_NONE},
 };
+
+#if CONFIG_VP8_VDPAU_DECODER
+AVCodec ff_vp8_vdpau_decoder = {
+    .name           = "vp8_vdpau",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_VP8,
+    .priv_data_size = sizeof(VP8Context),
+    .init           = vp8_decode_init,
+    .close          = vp8_decode_free,
+    .decode         = vp8_decode_frame,
+    .capabilities   = CODEC_CAP_DR1 | CODEC_CAP_HWACCEL_VDPAU,
+    .flush          = vp8_decode_flush,
+    .long_name      = NULL_IF_CONFIG_SMALL("On2 VP8 (VDPAU acceleration)"),
+    .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_VDPAU_VP8, PIX_FMT_NONE},
+};
+#endif
