@@ -396,12 +396,11 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
     int i = 0;
     int offset[4] = {0, 0, 0, 0};
     const uint8_t start_code[3] = {0x9d, 0x01, 0x2a};
-    ptrdiff_t header_size = (s->keyframe == 0) ? 3 : 10;
 
     render = (struct vdpau_render_state *)s->framep[VP56_FRAME_CURRENT]->data[0];
     assert(render);
 
-    // Fill VdpPictureInfoVP8 struct
+    /* Fill VdpPictureInfoVP8 struct */
     render->info.vp8.key_frame        = !s->keyframe;
     render->info.vp8.version          = s->profile;
     render->info.vp8.show_frame       = !s->invisible;
@@ -411,7 +410,7 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
     render->info.vp8.vertical_scale   = 0;
     render->info.vp8.height           = s->avctx->height;
 
-    // Handle reference frames
+    /* Handle reference frames */
     render->info.vp8.previous_frame   = VDP_INVALID_HANDLE;
     render->info.vp8.golden_frame     = VDP_INVALID_HANDLE;
     render->info.vp8.altref_frame     = VDP_INVALID_HANDLE;
@@ -438,14 +437,15 @@ void ff_vdpau_vp8_decode_picture(VP8Context *s,
         }
     }
 
-    // We add the start_code, usually found in the key frame uncompressed header
+    /* We add the key frame start code usually found in the key frame
+       uncompressed header into a separate bitstream buffer. */
     ff_vdpau_vp8_add_data_chunk(s, start_code, sizeof(start_code));
 
-    // We add the VP8 data buffer
-    ff_vdpau_vp8_add_data_chunk(s, buf + header_size, buf_size);
+    /* We add the complete VP8 data buffer */
+    ff_vdpau_vp8_add_data_chunk(s, buf, buf_size);
 
-    // Instead of calling ff_draw_horiz_band() like mpeg based codecs,
-    // we call draw_horiz_band() directly
+    /* Instead of calling ff_draw_horiz_band() like mpeg based codecs,
+       we call draw_horiz_band() directly. */
     s->avctx->draw_horiz_band(s->avctx, s->framep[VP56_FRAME_CURRENT], offset, 0, 0, s->avctx->height);
 
     render->bitstream_buffers_used = 0;
